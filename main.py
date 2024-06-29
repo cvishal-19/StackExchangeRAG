@@ -16,16 +16,21 @@ os.environ["GOOGLE_API_KEY"] = "YOUR_GOOGLE_API_KEY"
 if __name__ == '__main__':
     search_query = input("Enter your initial math question (this will be used as the search query): ")
     total_results = 10
+    
     site = 'math.stackexchange'
+    
     question_ids = get_question_ids(search_query, total_results, site)
     print(f"Found {len(question_ids)} question IDs:")
     print(question_ids)
+    
     doc = fetch_and_process_answers(question_ids)
     embedding_model_name = "sentence-transformers/all-MiniLM-L6-v2"
     embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
     docs = [Document(page_content=answer) for answer in doc]
+    
     vectorstore = Chroma.from_documents(documents=docs, embedding=embeddings)
     retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 3})
+    
     llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.2)
     template = """You are a math expert answering questions based on information from Math Stack Exchange. Use the following context to answer the question at the end.
     Do not mention Stack Exchange or any external sources in your answer. Present the information as if it's your own expert knowledge.
@@ -36,15 +41,16 @@ if __name__ == '__main__':
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
     rag_prompt_custom = ChatPromptTemplate.from_template(template)
+    
     rag_chain = (
         {"context": retriever | format_docs, "question": RunnablePassthrough()}
         | rag_prompt_custom
         | llm
         | StrOutputParser()
     )
+    
     summary_prompt = 'Summarize the key mathematical concepts discussed so far: '
     chathistory = [summary_prompt]
-
     output = rag_chain.invoke(search_query)
     print("\nAnswer to initial question:", output)
     print("\n" + "-"*50 + "\n")
